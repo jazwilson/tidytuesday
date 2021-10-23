@@ -1,0 +1,313 @@
+---
+title: "Tidy Tuesday Week 2: Transit Cost Project"
+output: html_notebook
+---
+
+# Transit Cost Project
+
+**The data this week comes from [Transit Costs Project](https://transitcosts.com).**
+
+*The [Transit Costs Project](https://transitcosts.com) talks about compares the costs of transit projects worldwide in greater detail.*
+
+**Credit**: [Dr Jasmine Wilson](@WilsonJasmine)
+
+## Read in data
+
+```{r}
+library(tidyverse)
+library(rgdal) 
+library(rgeos) 
+library(tidyselect) 
+library(tmap) 
+library(leaflet) 
+library(RJSONIO) 
+library(sf) 
+library(tmap)
+library(ggplot2)
+library(cowplot)
+```
+
+## Read in data and filter out NA values
+
+```{r}
+transit_cost <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-01-05/transit_cost.csv')
+
+## Filtering out rows with missing values
+
+# list rows of data which have missing values 
+transit_cost[!complete.cases(transit_cost),]
+# create new dataset without missing data 
+TC <- na.omit(transit_cost)
+```
+
+## Calculate total length of time taken or estimated for each project
+
+```{r}
+
+class(TC$start_year)
+class(TC$end_year)
+
+#Change the class to an integer
+TC$start_year_num = as.integer(TC$start_year)
+TC$end_year_num   = as.integer(TC$end_year)
+
+#Check to see NA rows 
+TC[!complete.cases(TC),]
+#only one row - end year = x
+
+# create new data set without missing data 
+TC_1 <- na.omit(TC)
+
+#Adding new column for total time taken for project
+TC_1 <- 
+       mutate(TC_1 
+       , total_years = end_year_num - start_year_num
+       , length_per_year = (length/total_years))
+
+```
+
+
+## Add latitude and longitude for spatial mapping of data
+
+
+```{r}
+
+# To add associated lat/lon: <https://stackoverflow.com/questions/13905098/how-to-get-the-longitude-and-latitude-coordinates-from-a-city-name-and-country-i>
+# Use: library(RJSONIO)
+
+nrow <- nrow(TC_1)
+counter <- 1
+TC_1$lon[counter] <- 0
+TC_1$lat[counter] <- 0
+while (counter <= nrow){
+  CityName <- gsub(' ','%20',TC_1$city[counter]) 
+  CountryCode <- TC_1$country[counter]
+  url <- paste(
+    "http://nominatim.openstreetmap.org/search?city="
+    , CityName
+    , "&countrycodes="
+    , CountryCode
+    , "&limit=9&format=json"
+    , sep="")
+  x <- fromJSON(url)
+  if(is.vector(x)){
+    TC_1$lon[counter] <- x[[1]]$lon
+    TC_1$lat[counter] <- x[[1]]$lat    
+  }
+  counter <- counter + 1
+}
+
+```
+
+
+Convert data to spatial format and plot map points
+
+```{r}
+
+#Convert lat and lon to numeric
+TC_1$lat.num <- as.numeric(TC_1$lat)
+TC_1$lon.num <- as.numeric(TC_1$lon)
+
+#Convert data to spatial format
+#We will be using the standard EPSG:4326 or WGS 84 projection 
+#Use: library(sf)
+
+map.points = st_as_sf(TC_1
+                      , coords = c("lon.num", "lat.num")
+                      , crs = 4326
+                      , agr = "constant")
+
+class(map.points)
+
+##Plot map points
+#Use: library(tmap)
+
+head(map.points)
+
+tmap_mode('view') #"view" = interactive, "plot" = non-interactive
+
+tmap_options(bg.color = "black", legend.text.color = "white")
+
+
+Map_Plot_1 =    tm_shape(map.points) +
+                tm_dots(col ="total_years"
+                , size  = 0.1
+                , style = "pretty"
+                , id    = "city"
+                , popup.vars = c(
+                "city:" = "city", 
+                "country:" = "country") # light in popup
+                , breaks = c(0,1,2,Inf)
+                , palette = c("aquamarine2", "cornflowerblue", "brown1")
+                , title = "Project length in years") +
+                  tm_layout("Long lat coordinates (WGS84)", inner.margins=c(0,0,.1,0), title.size=.8) +
+                  tm_basemap("Stamen.Watercolor")
+Map_Plot_1
+
+
+Map_Plot_2 =    tm_shape(map.points) +
+                tm_dots(col ="cost"
+                , size  = 0.1
+                , style = "pretty"
+                , id    = "city"
+                , popup.vars = c(
+                "city:" = "city", 
+                "country:" = "country") # light in popup
+                , breaks = c(0,1,2,Inf)
+                , palette = c("aquamarine2", "cornflowerblue", "brown1")
+                , title = "Cost of project (millions)") +
+                  tm_layout("Long lat coordinates (WGS84)", inner.margins=c(0,0,.1,0), title.size=.8) +
+                  tm_basemap("Stamen.Watercolor")
+
+Map_Plot_2
+
+#View multiple variables cocurrently
+Facets = tm_shape(map.points) +
+    tm_dots(c("total_years", "cost")) +
+    tm_facets(sync = TRUE, ncol = 2)
+Facets      
+
+## save an image ("plot" mode)
+tmap_save(Map_Plot_1, filename = "Project length in years.html")
+
+## save as stand-alone HTML file ("view" mode)
+tmap_save(Map_Plot_2, filename = "Cost project.html")
+
+
+```
+
+#make RShiny app
+
+```{r}
+
+data(map.points)
+map.points.select <- 	select(map.points, country, city, start_year, end_year, length, cost, real_cost, ppp_rate, cost_km_millions, currency, total_years, length_per_year)
+
+world_vars <- setdiff(names(map.points.select), c("iso_a3", "start_year", "length", "cost"))
+	
+
+	
+	ui <- fluidPage(
+		    titlePanel("Data Transit costs"),
+		    tmapOutput("map"),
+	    	selectInput("var", "Variable", 
+		            c("Length (Km)"             = "length",
+                  "Total years of project"  = "total_years",
+		              "PPP rate"                = "ppp_rate",
+		              "Cost Millions per KM"    = "cost_km_millions",
+		              "unit length per year"    = "length_per_year"))
+	)
+	
+	server <- function(input, output, session) {
+		output$map <- renderTmap({
+			tm_shape(map.points) +
+				  tm_dots(col = world_vars[1], zindex = 401)
+		})
+		
+		observe({
+			var <- input$var
+			tmapProxy("map", session, {
+				tm_remove_layer(401) +
+				tm_shape(map.points) +
+					tm_dots(var
+					      , zindex = 401
+					      , size  = 0.05
+                , style = "pretty"
+                , id    = "city"
+                , popup.vars = c(
+                                  "city:" = "city", 
+                                  "country:" = "country") # light in popup
+                , breaks = c(0,1,2,Inf)
+                , palette = c("aquamarine2", "cornflowerblue", "brown1")
+                , title = "Legendary") +
+        
+			    tm_layout("Long lat coordinates (WGS84)"
+                , inner.margins=c(0,0,.1,0)
+                , title.size=.8)
+			})
+		})
+	}	
+	
+	
+	app <- shinyApp(ui, server)
+	if (interactive()) app
+	
+
+```
+
+Plot relationships
+```{r}
+library(tidyverse)
+library(hrbrthemes)
+library(viridis)
+library(plotly)
+library(d3heatmap)
+
+# Load data 
+
+data_3 <- TC_1 %>% as.data.frame()
+
+# Select a few country
+Country_selected = subset(data_3, country %in% c( "IN","RU", "MX","DK", "NO", "AU", "SG" ))
+
+p4 = ggplot(Country_selected
+         , aes(x = length, y = cost)) +
+           geom_point(size = 2, shape = 21, stroke = 1, (aes(color = country))) +
+           labs(x = "Cost (millions)"
+              , y = "Length of transit project"
+              , subtitle = "Cost and length of transit project") 
+
+p4
+
+p5 = ggplot(Country_selected
+           , aes(x = length, y = cost))+
+    geom_point (aes(color = country)) +
+    geom_smooth(aes(color = country, fill = country), method = "lm") + 
+    scale_color_viridis(discrete = TRUE, option = "B")+
+    scale_fill_viridis(discrete = TRUE)+
+    xlab("cost") +
+    ylab("Length of transit line (km)")
+p5
+
+
+ggsave(p4, filename = "Cost v length of transit project")
+```
+
+
+# Heatmap 
+
+```{r}
+library(tidyverse)
+library(hrbrthemes)
+library(kableExtra)
+options(knitr.table.format = "html")
+library(patchwork)
+
+data = TC_1
+
+# Plot
+p6 = (Country_selected %>%
+     filter(!is.na(total_years)) %>%
+     arrange(total_years) %>%
+     ggplot( aes(x=country, y=total_years) ) +
+     geom_segment( aes(x=country ,xend=country, y=0, yend=total_years), color="grey") +
+     geom_point(size=3, color="#69b3a2") +
+     coord_flip() +
+     theme_ipsum() +
+     theme(
+       panel.grid.minor.y = element_blank(),
+       panel.grid.major.y = element_blank(),
+       legend.position="none"
+    ) +
+    xlab("") +
+    ylab("Length of project (years)"))
+```
+
+
+
+```{r}
+
+
+
+```
+

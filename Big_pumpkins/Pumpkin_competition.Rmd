@@ -1,0 +1,109 @@
+---
+title: "Jaz TidyTuesday Pumpkin week"
+---
+# How do pumpkin weights change over time? 
+
+The data this week comes from [BigPumpkins.com]
+
+Credit: [Jasmine Wilson](Twitter: @Wilson_Jaz)
+
+```{r}
+#Load library
+pacman::p_load(inspectdf, visdat, readr, tidyverse,DataExplorer, tidyr, plyr,epiDisplay, showtext, ggplot2, gganimate,ggtext,av)
+
+font_add_google("Nosifer")
+font_add_google("Metal Mania")
+showtext_auto()
+```
+
+
+```{r}
+#Read in data 
+pumpkins <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-10-19/pumpkins.csv')
+
+#remove NA values
+pk <- pumpkins
+#convert weight_lbs from character to numeric
+pk$weight.numeric     <- as.numeric(pk$weight_lbs)
+pk$est.weight.numeric <- as.numeric(pk$est_weight)
+pk$ott.numeric        <- as.numeric(pk$ott)
+pk$pct.chart.numeric  <- as.numeric(pk$pct_chart)
+pk$place.numeric      <- as.numeric(pk$place)
+
+#Split the id column [year-place] into separate columns: [year] [place]
+pk2 <- pk %>% separate(id, c("year", "place"), "-")
+
+#inspection of variables 
+inspect_types(pk2)     %>% show_plot()
+inspect_na(pk2)        %>% show_plot()
+inspect_imb(pk2)       %>% show_plot()
+inspect_cat(pk2)       %>% show_plot()
+inspect_cor(pk2)       %>% show_plot()
+
+#select columns of interest for visualisation 
+pk3 = pk2[, c('year', 'country', 'weight.numeric')]
+
+#Remove NA values
+pk4 <- na.omit(pk3)
+
+#Plot top 10 countries to appear most frequently in the dataset 
+  #Calculate country frequency 
+  c    <- transform(pk4,Country_Frequency=ave(seq(nrow(pk4)),country,FUN=length))
+  #Arrange country freq by descending order
+  c.as <- arrange(c, -Country_Frequency)
+  #List unique countries in descending order
+  c.un <- c.as$country %>% unique()
+  head(c.un, 10)
+
+  #subset these countries 
+pk5 <- pk4 %>% subset(country %in% c("United States", "Canada", "Germany", "Italy", "Austria", "France", "Japan", "United Kingdom", "Finland", "The Netherlands"))
+  #assign date variable for animation  
+pk5$date = pk5$year
+ 
+ 
+#Generate plot
+ 
+p <- pk5 %>%  ggplot(aes(country,weight.numeric, fill = country))+
+  geom_boxplot() +
+  ylab(label ="Pumpkin weight (lbs)")+
+  xlab(label = "Country") +
+  labs(title  = "Which country has \n the heaviest pumpkins per year?",
+       subtitle = "{closest_state}",
+       caption = "TidyTuesday by Dr Jaz Wilson") + 
+  coord_flip() +
+    scale_fill_manual(values = c("#7f3b08", "#b35806", "#e08214", "#fdb863", "#fee0b6", "#d8daeb", "#b2abd2", "#8073ac", "#9e7be7", "#6318ff"))+
+    theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill="black"),
+    plot.background  = element_rect(fill = "black"),
+    axis.line = element_line(size = 1, colour = "#f9cb9c", linetype=1),
+    axis.text.x  = element_text( angle = 90, color="#f9cb9c", size=20, face=1,  family = "Metal Mania"),
+    axis.text.y  = element_text( angle = 0, color="#f9cb9c", size=30, face=1, family = "Metal Mania"),
+    axis.title.x = element_text(color="#fcb762", size=40, face=1, margin=margin(t=20), family = "Metal Mania"),
+    axis.title.y = element_text(color="#fcb762", size=40, face=1, margin=margin(r=20), family = "Metal Mania"),
+    plot.title = element_text(colour = "#ff8d00",size=36, face=1, family = "Nosifer", hjust =0.5, vjust = 3),
+    plot.subtitle = element_text(colour = "#FFE9B5",size=40, face=1, family = "Metal Mania", hjust =0.5,vjust = 3),
+    plot.caption = element_text(color = "#CC3610", face = "italic",size=25, family = "Metal Mania",hjust =-0.5,vjust = 3),
+    legend.position = "none",
+    strip.text.x = element_text(size = 12, color = "white", face = "bold"),
+    strip.background = element_rect(color="black", fill="#bf3d3d", size=1.5, linetype="solid"),
+    plot.margin=unit(c(4,8,1,1),"lines")
+ 
+    ) 
+
+# Animate 
+
+anim <- p  + 
+  transition_states(
+    year,
+    transition_length = 1,
+    state_length = 2) +
+  enter_fade() + 
+  exit_shrink() +
+  ease_aes('sine-in-out')
+  
+a <- animate(anim, height = 12, width = 15, units = "in", res = 150, renderer = av_renderer())
+anim_save("Pumpkin_animation2.mp4", a)
+anim_save("Pumpkin_animation3.gif", a)
+```
