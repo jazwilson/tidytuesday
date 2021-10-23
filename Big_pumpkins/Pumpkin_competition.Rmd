@@ -9,8 +9,7 @@ Credit: [Jasmine Wilson](Twitter: @Wilson_Jaz)
 
 ```{r}
 #Load library
-pacman::p_load(inspectdf, visdat, readr, tidyverse,DataExplorer, tidyr, plyr,epiDisplay, showtext, ggplot2, gganimate,ggtext,av)
-
+pacman::p_load(inspectdf, visdat, readr, tidyverse,DataExplorer, tidyr, plyr,epiDisplay, showtext, ggplot2, gganimate,ggtext,av,gifski,png)
 font_add_google("Nosifer")
 font_add_google("Metal Mania")
 showtext_auto()
@@ -20,7 +19,6 @@ showtext_auto()
 ```{r}
 #Read in data 
 pumpkins <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-10-19/pumpkins.csv')
-
 #remove NA values
 pk <- pumpkins
 #convert weight_lbs from character to numeric
@@ -29,23 +27,22 @@ pk$est.weight.numeric <- as.numeric(pk$est_weight)
 pk$ott.numeric        <- as.numeric(pk$ott)
 pk$pct.chart.numeric  <- as.numeric(pk$pct_chart)
 pk$place.numeric      <- as.numeric(pk$place)
+#Split the id column [year-place] into separate columns: [year] [type]
+pk2 <- pk %>% separate(id, c("year", "type"), "-")
 
-#Split the id column [year-place] into separate columns: [year] [place]
-pk2 <- pk %>% separate(id, c("year", "place"), "-")
+#Select for type: Giant pumpkins
 
+pk2 <- pk2 %>% subset(type %in% "P")
 #inspection of variables 
 inspect_types(pk2)     %>% show_plot()
 inspect_na(pk2)        %>% show_plot()
 inspect_imb(pk2)       %>% show_plot()
 inspect_cat(pk2)       %>% show_plot()
 inspect_cor(pk2)       %>% show_plot()
-
 #select columns of interest for visualisation 
 pk3 = pk2[, c('year', 'country', 'weight.numeric')]
-
 #Remove NA values
 pk4 <- na.omit(pk3)
-
 #Plot top 10 countries to appear most frequently in the dataset 
   #Calculate country frequency 
   c    <- transform(pk4,Country_Frequency=ave(seq(nrow(pk4)),country,FUN=length))
@@ -54,9 +51,8 @@ pk4 <- na.omit(pk3)
   #List unique countries in descending order
   c.un <- c.as$country %>% unique()
   head(c.un, 10)
-
   #subset these countries 
-pk5 <- pk4 %>% subset(country %in% c("United States", "Canada", "Germany", "Italy", "Austria", "France", "Japan", "United Kingdom", "Finland", "The Netherlands"))
+pk5 <- pk4 %>% subset(country %in% c("United States", "Canada", "Germany", "Italy", "Austria", "Japan", "United Kingdom", "Belgium", "Spain", "Slovenia"))
   #assign date variable for animation  
 pk5$date = pk5$year
  
@@ -92,8 +88,9 @@ p <- pk5 %>%  ggplot(aes(country,weight.numeric, fill = country))+
  
     ) 
 
-# Animate 
+stillframeimage <- ggsave(p,file = "./pumpkin.png",height = 12, width = 15, units = "in")
 
+# Animate 
 anim <- p  + 
   transition_states(
     year,
@@ -103,7 +100,9 @@ anim <- p  +
   exit_shrink() +
   ease_aes('sine-in-out')
   
-a <- animate(anim, height = 12, width = 15, units = "in", res = 150, renderer = av_renderer())
-anim_save("Pumpkin_animation2.mp4", a)
-anim_save("Pumpkin_animation3.gif", a)
+a <- animate(anim, height = 12, width = 15, units = "in", res = 50, renderer = av_renderer())
+anim_save("Pumpkin_animated.mp4", a)
+b <- animate(anim, height = 12, width = 15, units = "in", res = 50, renderer = gifski_renderer("gganim.gif"))
+anim_save("Pumpkin_animated.gif", b)
+
 ```
