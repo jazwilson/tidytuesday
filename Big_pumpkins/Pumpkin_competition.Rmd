@@ -20,7 +20,7 @@ showtext_auto()
 #Read in data 
 pumpkins <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-10-19/pumpkins.csv')
 #remove NA values
-pk <- pumpkins
+pk <- na.omit(pumpkins)
 #convert weight_lbs from character to numeric
 pk$weight.numeric     <- as.numeric(pk$weight_lbs)
 pk$est.weight.numeric <- as.numeric(pk$est_weight)

@@ -1,0 +1,182 @@
+---
+title: "Jaz TidyTuesday Doctor Who week"
+---
+
+# Dr. Who - what years were the most popular episodes aired?
+
+The data this week comes from [datardis package by way of Jonathan Kit]
+
+Credit: [Jasmine Wilson](Twitter:%20@Wilson_Jaz)
+
+### Library
+
+```{r}
+#Load library
+pacman::p_load(dplyr, inspectdf, visdat, readr, tidyverse, DataExplorer, tidyr, plyr,epiDisplay, showtext, ggplot2,plotly, LaCroixColoR, gridExtra, ggrepel, plotly, ggtext, png)
+
+font_add_google("Orbitron", "orbitron")
+showtext_opts(dpi = 320)
+showtext_auto()
+
+```
+
+### Read in data
+
+```{r}
+directors <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-11-23/directors.csv')
+episodes <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-11-23/episodes.csv')
+writers <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-11-23/writers.csv')
+imdb <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-11-23/imdb.csv')
+
+imdb_rn <- imdb %>% dplyr::rename(rating_imdb = rating)
+
+```
+
+### join data tables
+```{r}
+dir_ep <- full_join(
+  directors,
+  episodes,
+  by = "story_number",
+  copy = FALSE
+)
+
+dir_ep_wri <-  full_join(
+  dir_ep,
+  writers,
+  by = "story_number",
+  copy = FALSE
+)
+
+data_all <-  full_join(
+  dir_ep_wri,
+  imdb_rn,
+  by =c("season_number" = "season", "episode_number" = "ep_num" )
+)
+
+#Drop col
+data_all2 <- subset( data_all, select = -c(serial_title, production_code) ) # WILL
+head(data_all2)
+
+#Drop NA
+df <- na.omit(data_all2)
+
+#split air date into d/m/y
+df <- df %>% separate(air_date, c("air_day", "air_month", "air_year"))
+
+#change rating to numeric
+as.numeric(df$rating_imdb)
+class(df$rating_imdb)
+
+```
+
+### inspect data 
+
+```{r}
+inspect_types(df)  %>% show_plot()
+inspect_num(df)    %>% show_plot()
+inspect_imb(df) %>% show_plot()
+inspect_cat(df) %>% show_plot()
+inspect_cor(df) %>% show_plot()
+
+library(DataExplorer)
+DataExplorer::create_report(df)
+```
+
+### plot data 
+
+```{r}
+
+p <- df %>%
+  mutate(text = paste( "Duration(min): ", duration, 
+                       "\nImdb_rating: ", rating_imdb, 
+                       "\nUK_viewers (mn): ", uk_viewers, 
+                       sep="")) %>%
+  ggplot(aes(x=uk_viewers, y=rating_imdb, size = duration, color = air_year, text = text)) +
+      geom_point(alpha=0.8) +
+      scale_size(range = c(1, 15), name="Episode duration (min)") +
+      scale_color_manual(values=lacroix_palette("PeachPear",type = "continuous", n=12)) +
+      guides(size = guide_legend(override.aes = list(color = "white"))) +
+  
+     labs(
+     title = "Doctor Who: Best episodes in the past?", 
+     y = "Imdb ratings (1-10)", 
+     x = "Number of UK viewers (millions)", 
+     #subtitle = "Vinsert words here", 
+     caption = "@Wilson_Jaz| source = {datardis} R package") + 
+
+  theme(plot.background  = element_rect(fill= "#000e29",),
+        plot.margin      = margin(10, 15, 10, 20),
+        panel.background = element_rect(fill = NA, colour = NA),
+        panel.border     = element_rect(fill = NA, colour = NA),
+        panel.grid.major.y = element_line(colour = "#7c7e81", linetype = "dotted"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor = element_blank(),
+       
+        axis.text.x  = element_text(size = 10, colour = "#7c7e81"),
+        axis.text.y  = element_text(size = 10, colour = "#7c7e81"),
+        axis.ticks   = element_blank(),
+        axis.title.y = element_text(size = 12,  margin = margin(r = 10)),
+        axis.title.x = element_text(size = 12,  margin = margin(b = -10)),
+        
+        plot.caption = element_text(family = "orbitron", size = 8,colour = "grey70"),
+        plot.caption.position = "plot",
+        
+        legend.background = element_rect(fill = "#000e29", color="#000e29", size=2),
+        legend.box.background = element_rect(fill = "#000e29", color="#000e29", size=2),
+        legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key=element_blank(),
+        legend.direction = "vertical", 
+        legend.position = "right",
+        legend.box = "horizontal",
+        legend.key.height=unit(1,"line"),
+        
+  
+        #legend.key = element_blank(),
+        #legend.key.width = unit(2, "lines"),
+        
+        plot.title = element_text(colour = "white",
+                                  family = "orbitron",
+                                  size = 20,
+                                  #margin = margin(0, 0, 45, 0)
+                                  ),
+        plot.subtitle = element_text(colour = "#afd0dc",
+                                   family = "orbitron",
+                                   size = 15,
+                                   #margin = margin(10, 0, 10, 0)
+                                   ),
+        legend.text = element_text(colour = "#afd0dc",
+                                   family = "orbitron",
+                                   size = 10),
+        legend.title = element_text(colour = "white",
+                                    family = "orbitron",
+                                    size = 10),
+        axis.title = element_text(colour = "#b1c6ef",
+                                  family = "orbitron",
+                                  size = 6),
+        axis.text = element_text(colour = "#7e7b7b",
+                                 family = "orbitron"))
+view(p)
+
+#Save plot 
+ggsave(p, file = "filepath/plot.png", width=30, height =20, units = "cm")
+    
+#for interactive plot 
+ggplotly(p, tooltip="text")
+
+#save interactive plot 
+ip <- ggplotly(p, tooltip="text")
+htmlwidgets::saveWidget(ip, "~/Desktop/plot.html")
+```
+
+#notes - imdb rating scale:
+
+1 Ridiculous (Burn) 
+2 Awful (Nobody can you cant borrow it)) 
+3 Bad (No but you can borrow it)\
+4 ehh (No desire to watch again might with someone)\
+5 Average (Probably not)\
+6 Good (Maybe) 7 Good + (Probably)\
+8 Very Good (Again)\
+9 Excellent (Again and Again)\
+10 Amazing (Indeffinitely)
