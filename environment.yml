@@ -1,0 +1,14 @@
+name: tidytuesday_env
+channels:
+        - conda-forge
+        - bioconda
+dependencies:
+        - matplotlib
+        - pandas
+        - ipykernel 
+        - jupyterlab
+        - numpy
+        - scipy
+        - seaborn
+        - python=3.10
+        - plotnine
